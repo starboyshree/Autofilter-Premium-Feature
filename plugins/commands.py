@@ -15,7 +15,7 @@ from database.config_db import mdb
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
-from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files
+from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files, get_full_file_id
 from database.users_chats_db import db
 from info import *
 from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename
@@ -291,12 +291,40 @@ async def start(client, message):
                     howtodownload = settings.get('tutorial_3', TUTORIAL_3)
                 else:
                     howtodownload = settings.get('tutorial_2', TUTORIAL_2) if is_second_shortener else settings.get('tutorial', TUTORIAL)
-                buttons = [[
-                    InlineKeyboardButton(text="♻️ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ ♻️", url=verify)
-                ],[
-                    InlineKeyboardButton(text="⁉️ ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ⁉️", url=howtodownload)
-                ]]
-                reply_markup=InlineKeyboardMarkup(buttons)
+                from urllib.parse import urlparse
+                def _valid_button_url(value):
+                    try:
+                        p = urlparse(str(value or ""))
+                        return p.scheme in ("http", "https") and bool(p.netloc)
+                    except Exception:
+                        return False
+
+                if not _valid_button_url(verify):
+                    logger.error("Invalid verification URL generated; skipping verification for this request: %r", verify)
+                    # Do not send an invalid Telegram button. Continue to normal file delivery.
+                else:
+                    buttons = [[
+                        InlineKeyboardButton(text="♻️ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ ♻️", url=verify)
+                    ]]
+                    if _valid_button_url(howtodownload):
+                        buttons.append([
+                            InlineKeyboardButton(text="⁉️ ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ⁉️", url=howtodownload)
+                        ])
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                    if await db.user_verified(user_id): 
+                        msg = script.THIRDT_VERIFICATION_TEXT
+                    else:            
+                        msg = script.SECOND_VERIFICATION_TEXT if is_second_shortener else script.VERIFICATION_TEXT
+                    n=await m.reply_text(
+                        text=msg.format(message.from_user.mention),
+                        protect_content = True,
+                        reply_markup=reply_markup,
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                    await asyncio.sleep(300) 
+                    await n.delete()
+                    await m.delete()
+                    return
                 if await db.user_verified(user_id): 
                     msg = script.THIRDT_VERIFICATION_TEXT
                 else:            
@@ -364,9 +392,10 @@ async def start(client, message):
                         ]
                 else:
                     btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]]
+                real_file_id = get_full_file_id(files1.file_id, files1.file_ref)
                 msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
-                    file_id=file_id,
+                    file_id=real_file_id,
                     caption=f_caption,
                     protect_content=settings.get('file_secure', PROTECT_CONTENT),
                     reply_markup=InlineKeyboardMarkup(btn)
@@ -406,9 +435,11 @@ async def start(client, message):
             else:
             
                 btn = [[InlineKeyboardButton('📌 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇꜱ ᴄʜᴀɴɴᴇʟ 📌', url=UPDATE_CHNL_LNK)]] 
+            file_details = files_[0] if files_ else None
+            real_file_id = get_full_file_id(file_details.file_id, file_details.file_ref) if file_details else file_id
             msg = await client.send_cached_media(
                 chat_id=message.from_user.id,
-                file_id=file_id,
+                file_id=real_file_id,
                 protect_content=settings.get('file_secure', PROTECT_CONTENT),
                 reply_markup=InlineKeyboardMarkup(btn))
 
