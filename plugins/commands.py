@@ -341,12 +341,12 @@ async def start(client, message):
             user_id = message.from_user.id
             is_premium = await db.has_premium_access(user_id)
 
-        files = temp.GETALL.get(file_id)
+            files = temp.GETALL.get(file_id)
 
-        if not files:
-            return await message.reply(
-                '<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>'
-            )
+            if not files:
+                return await message.reply(
+                    '<b><i>ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !</b></i>'
+                )
 
         filesarr = []
 
