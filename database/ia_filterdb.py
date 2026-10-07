@@ -2,7 +2,7 @@ import logging
 from struct import pack
 import re
 import base64
-from pyrogram.file_id import FileId
+from pyrogram.file_id import FileId, FileType
 from typing import Dict, List
 from collections import defaultdict
 from pymongo.errors import DuplicateKeyError
@@ -295,6 +295,32 @@ def encode_file_id(s: bytes) -> str:
 
 def encode_file_ref(file_ref: bytes) -> str:
     return base64.urlsafe_b64encode(file_ref).decode().rstrip("=")
+
+
+def get_full_file_id(file_id, file_ref):
+    """Rebuild the real Telegram file_id from the compact DB id + file reference."""
+    raw = base64.urlsafe_b64decode(file_id + "=" * (-len(file_id) % 4))
+    expanded = bytearray()
+    i = 0
+    while i < len(raw):
+        if raw[i] == 0:
+            if i + 1 >= len(raw):
+                raise ValueError("Invalid compact file_id")
+            expanded.extend(b"\\x00" * raw[i + 1])
+            i += 2
+        else:
+            expanded.append(raw[i])
+            i += 1
+    if len(expanded) < 18 or expanded[-2:] != bytes([22, 4]):
+        raise ValueError("Invalid compact file_id format")
+    file_type, dc_id, media_id, access_hash = __import__("struct").unpack("<iiqq", bytes(expanded[:-2]))
+    return FileId(
+        file_type=FileType(file_type),
+        dc_id=dc_id,
+        media_id=media_id,
+        access_hash=access_hash,
+        file_reference=base64.urlsafe_b64decode((file_ref or "") + "=" * (-len(file_ref or "") % 4))
+    ).encode()
 
 
 def unpack_new_file_id(new_file_id):
