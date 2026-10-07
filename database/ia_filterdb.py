@@ -306,7 +306,7 @@ def get_full_file_id(file_id, file_ref):
         if raw[i] == 0:
             if i + 1 >= len(raw):
                 raise ValueError("Invalid compact file_id")
-            expanded.extend(b"\\x00" * raw[i + 1])
+            expanded.extend(bytes([0]) * raw[i + 1])
             i += 2
         else:
             expanded.append(raw[i])
